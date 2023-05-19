@@ -5,17 +5,17 @@ STACK 100h
 
 DATASEG
 	NodesData dw 10000 dup (?)
-	Mode db 2  ; 1 for a* 2 for Dijkstra's algorithm
+	Mode db 1  ; 1 for a* 2 for Dijkstra's algorithm
 	picFilename db 'Hud.bmp', 0 ;ASCIZ (Null-terminated string)
 	tmpHeader db 54 dup (0)
 	Palette db 1024 dup (0) ; All files should have the same palette, so we apply it once.
 	picture db 10 * 320 dup (0)
-	Speed db 5 ; 1 to 5 
+	Speed db 1 ; 1 to 7
 CODESEG
 ;------------------------------------------------------------------------;
 ;general equ 
 color equ [word ptr NodesData]
-foundPath	equ  [word ptr NodesData + 2]
+FoundPath	equ  [word ptr NodesData + 2]
 IndexOfBestNode	equ  [word ptr NodesData + 4]
 NumberOfNodesSearcherd	equ  [word ptr NodesData + 6]
 XstartPoint	equ		[word ptr NodesData + 8] 
@@ -23,10 +23,16 @@ YstartPoint	equ		[word ptr NodesData + 10]
 XendPoint	equ		[word ptr NodesData + 12] 
 YendPoint	equ		[word ptr NodesData + 14] 
 ;------------------------------------------------------------------------;
+;------------------------------------------------------------------------;
+;delay
+;Args:None.
+;Action: cause delay depends on speed
+;Return: None.
+;------------------------------------------------------------------------;
 proc delay
 	pusha 
 	xor bx, bx  
-	mov bl, 6
+	mov bl, 8
 	sub bl, [Speed]
 	mov ax, 2000
 	mul bx 
@@ -185,7 +191,7 @@ endp DrawFromMemory
 ;------------------------------------------------------------------------;
 ;PaintScrean
 ;Args:None.
-;Action: paint screan to its defult way
+;Action: paint screan Default 
 ;Return: None.
 ;------------------------------------------------------------------------;
 proc PaintScrean
@@ -195,8 +201,8 @@ proc PaintScrean
 	mov XendPoint, 290 ;define end node
 	mov YendPoint, 100
 	
-	mov NumberOfNodesSearcherd, 0
-	mov foundPath, 0
+	mov NumberOfNodesSearcherd, 0 ; reset NumberOfNodesSearcherd
+	mov FoundPath, 0 ;reset FoundPath
 	paintBoard:
 		mov bx, 10
 		xor ax, ax 
@@ -292,12 +298,12 @@ proc PaintSquare
 	mov dx, ax  
 	add ax, 10
 	mov ymax_PaintSquare, ax
-	loop1_PaintSquare:
+loop1_PaintSquare:
 		inc dx
 		mov cx, xstart_PaintSquare
 		cmp dx, ymax_PaintSquare
 		je endPaintSquare
-		loop2_PaintSquare:
+loop2_PaintSquare:
 			mov ax, xstart_PaintSquare
 			add ax, 9
 			cmp cx, ax
@@ -307,21 +313,24 @@ proc PaintSquare
 			int 10h
 			inc cx
 			jmp loop2_PaintSquare
-			
-	endPaintSquare:
+endPaintSquare:
 	popa
 	add sp, 4
 	pop bp 
 	ret 4
 endp PaintSquare
 
-
+;------------------------------------------------------------------------;
+;ClearArray 
+;Args: None
+;Action: reset all of Nodes Array
+;Return: ?
+;------------------------------------------------------------------------;
 proc ClearArray
 	pusha 
 	mov ax, 10000
 	mov cx, 17
-	
-	loop_ClearArray:
+loop_ClearArray:
 		mov bx, cx 
 		mov [word ptr bx], 0
 		
@@ -331,6 +340,7 @@ proc ClearArray
 	popa 
 	ret
 endp ClearArray
+
 ;------------------------------------------------------------------------;
 ;LoadChildren Note: the pixel of the parent needs to be the top right corner of the block 
 ;Args: x, y , index in segment of parent
@@ -339,20 +349,20 @@ endp ClearArray
 ;------------------------------------------------------------------------;
 x_LoadChildren	equ  [bp + 4]
 y_LoadChildren	equ  [bp + 6]
-ParentIndex_LoadChildren equ [bp +8] 
+parentIndex_LoadChildren equ [bp +8] 
 
 proc LoadChildren
 	push bp 
 	mov bp, sp
 	pusha 
 	mov cx, -20  ;loop to get all the nodes around a point
-	loopAdjacentNodesOnXAxis:   
+loopAdjacentNodesOnXAxis:   
 		add cx, 10
 		mov dx, -10
 		cmp cx, 20
 		jne loopAdjacentNodesOnYAxis
 		jmp exitLoopAdjacent
-		loopAdjacentNodesOnYAxis:
+loopAdjacentNodesOnYAxis:
 			push cx 
 			push dx 
 			;skip not diagonal
@@ -361,7 +371,7 @@ proc LoadChildren
 			cmp cx, 0
 			je notdiagonal
 			jmp incYForLoopAdjacent
-			notdiagonal: 
+notdiagonal: 
 			
 			mov ax,x_LoadChildren
 			add ax, cx 
@@ -386,7 +396,7 @@ proc LoadChildren
 				jne colorcheckjumpoutofrange_LoadChildren
 				jmp incYForLoopAdjacent
 				
-				colorcheckjumpoutofrange_LoadChildren:
+colorcheckjumpoutofrange_LoadChildren:
 				push ax 
 				mov ax, color 
 				mov color, 38 
@@ -397,7 +407,7 @@ proc LoadChildren
 				pop ax 
 			jmp incYForLoopAdjacent
 
-			notthesame_LoadChildren:
+notthesame_LoadChildren:
 			
 			cmp dx, 10						
 			jg outofrangecheck2_LoadChildren  
@@ -428,11 +438,11 @@ outofrangecheck2_LoadChildren:
 			cmp al, 75
 			jne nextcolorcheck
 			push ax 
-			mov ax, ParentIndex_LoadChildren 
-			mov foundPath, ax 
+			mov ax, parentIndex_LoadChildren 
+			mov FoundPath, ax 
 			pop ax 
 			jmp incYForLoopAdjacent
-			nextcolorcheck:
+nextcolorcheck:
 			
 			push YstartPoint
 			push XstartPoint
@@ -447,42 +457,42 @@ outofrangecheck2_LoadChildren:
 			inc ax 
 			jmp DoReplaceInMemory
 NotNearStart:
-			push ParentIndex_LoadChildren
+			push parentIndex_LoadChildren
 			push dx 
 			push cx 
 			call CalculateFvalue  ;return F value with ax 
 DoReplaceInMemory:		
 			push ax 
-			push ParentIndex_LoadChildren
+			push parentIndex_LoadChildren
 			push dx 
 			push cx 
 			call ReplaceInMemory
-			incYForLoopAdjacent:
+incYForLoopAdjacent:
 			pop dx 
 			pop cx 
 			cmp dx, 10
 			jne JumploopAdjacentNodesOnXAxisToLong
 			jmp loopAdjacentNodesOnXAxis
-			JumploopAdjacentNodesOnXAxisToLong:
+JumploopAdjacentNodesOnXAxisToLong:
 			add dx, 10
 			jmp loopAdjacentNodesOnYAxis
 	
-	exitLoopAdjacent:
+exitLoopAdjacent:
 	popa 
 	pop bp 
 	ret 6
 endp LoadChildren
 
 ;------------------------------------------------------------------------;
-;CheckIfNear Note 
-;Args: x, y 
-;Action: check if x and y near start node 
-;Return: 0 if near
+;CheckIfNear  
+;Args: x1, y1 and x2, y2 
+;Action: check if node at x1, y1 is near x2,y2 Note: near is only one up one down one to the side and one to the other side 
+;Return: ax = 0 if near
 ;------------------------------------------------------------------------
-x_CheckIfNear	equ  [bp + 4]
-y_CheckIfNear	equ  [bp + 6]
-x_target equ [bp + 8]
-y_target equ [bp + 10]
+x1_CheckIfNear	equ  [bp + 4]
+y1_CheckIfNear	equ  [bp + 6]
+x2_target equ [bp + 8]
+y2_target equ [bp + 10]
 proc CheckIfNear
 	push bp 
 	mov bp, sp 
@@ -491,56 +501,56 @@ proc CheckIfNear
 	push bx 
 	
 	xor dx, dx 
-	mov ax, x_CheckIfNear
+	mov ax, x1_CheckIfNear
 	mov bx, 10 
 	div bx 
-	mov x_CheckIfNear, ax 
+	mov x1_CheckIfNear, ax 
 	
 	xor dx, dx 
-	mov ax, y_CheckIfNear
+	mov ax, y1_CheckIfNear
 	mov bx, 10 
 	div bx 
-	mov y_CheckIfNear, ax 
+	mov y1_CheckIfNear, ax 
 	
-	mov ax, x_target
+	mov ax, x2_target
 	xor dx, dx 
 	mov bx, 10 
 	div bx 
-	sub ax, x_CheckIfNear
+	sub ax, x1_CheckIfNear
 	cmp ax, 1
 	jg notNearStartX
 	cmp ax, -1 
 	jl notNearStartX
 	xor dx, dx 
-	mov ax, y_target
+	mov ax, y2_target
 	mov bx, 10 
 	div bx 
-	cmp ax, y_CheckIfNear
+	cmp ax, y1_CheckIfNear
 	jne notNearStartX
 	mov ax, 0
 	jmp endNearStart
 	
-	notNearStartX:
+notNearStartX:
 	
-	mov ax, y_target
+	mov ax, y2_target
 	xor dx, dx 
 	mov bx, 10 
 	div bx 
-	sub ax, y_CheckIfNear
+	sub ax, y1_CheckIfNear
 	cmp ax, 1
 	jg notNearStartY
 	cmp ax, -1 
 	jl notNearStartY
 	xor dx, dx 
-	mov ax, x_target
+	mov ax, x2_target
 	mov bx, 10 
 	div bx 
-	cmp ax, X_CheckIfNear
+	cmp ax, x1_CheckIfNear
 	jne notNearStartY
 	mov ax, 0
 	jmp endNearStart
 	
-	notNearStartY:
+notNearStartY:
 	mov ax, 1
 	
 	endNearStart:
@@ -552,18 +562,19 @@ proc CheckIfNear
 endp CheckIfNear
 
 ;------------------------------------------------------------------------;
-;ReplaceInMemory Note 
+;ReplaceInMemory  
 ;Args: x, y ,ParentIndex, f(n)
-;Action: replace in memory if better
-;Return: 0 if didnt work with ax 
+;Action: if this node exist in memory and this version is better f value replace else just add it 
+;Return: Nothing
 ;------------------------------------------------------------------------
 x_ReplaceInMemory	equ  [bp + 4]
 y_ReplaceInMemory	equ  [bp + 6]
-ParentIndex_ReplaceInMemory equ [bp +8] 
-Fx_ReplaceInMemory equ [bp + 10]
+parentIndex_ReplaceInMemory equ [bp +8] 
+fx_ReplaceInMemory equ [bp + 10]
 proc ReplaceInMemory
 	push bp 
 	mov bp, sp 
+	pusha 
 	mov cx, NumberOfNodesSearcherd
 GoOverMemory_ReplaceInMemory:
 	push cx 
@@ -583,7 +594,7 @@ GoOverMemory_ReplaceInMemory:
 	cmp dx, y_ReplaceInMemory
 	jne notfound_ReplaceInMemory
 	mov ax, [word ptr bx + 6]
-	cmp ax, Fx_ReplaceInMemory
+	cmp ax, fx_ReplaceInMemory
 	jg notfound_ReplaceInMemory
 	mov [word ptr bx + 6], ax
 	mov [word ptr bx + 4], dx 
@@ -602,13 +613,13 @@ notfound_ReplaceInMemory:
 	mul bx
 	add ax, 16 
 	mov bx, ax 
-	mov ax, ParentIndex_ReplaceInMemory
+	mov ax, parentIndex_ReplaceInMemory
 	mov [word ptr NodesData + bx], ax ;index of parent
 	mov cx, x_ReplaceInMemory
 	mov [word ptr NodesData + bx + 2], cx  ; x  
 	mov dx, y_ReplaceInMemory
 	mov [word ptr NodesData + bx + 4], dx ;y
-	mov ax, Fx_ReplaceInMemory
+	mov ax, fx_ReplaceInMemory
 	mov [word ptr NodesData + bx + 6], ax 
 	
 	mov color, 14 
@@ -617,14 +628,17 @@ notfound_ReplaceInMemory:
 	call PaintSquare
 	
 endforReplaceInMemory:
+	popa
 	pop bp 
 	ret 8
 endp ReplaceInMemory
+
 ;------------------------------------------------------------------------;
 ;CalculateFvaluerun
-;Args: x and y of node 
+;Args: x and y of node  
+;also two local varibles for more easy calculations
 ;Action: CalculateFvalue of node 
-;Return: f value of node
+;Return: ax: f value of node
 ;------------------------------------------------------------------------;
 x_CalculateFvalue	equ  [bp + 4]
 y_CalculateFvalue	equ  [bp + 6]
@@ -658,7 +672,6 @@ proc CalculateFvalue
 	mov dx, [word ptr NodesData + bx + 6]
 	sub dx, ax 
 	inc dx 
-	
 	
 	mov ax, hn_CalculateFvalue
 	add ax, dx ;f(n) = h(n) + g(n)   if i dont add h(n) it will be jefuhdrfvu algo
@@ -722,14 +735,14 @@ Proc CalculateHvalue
 	cmp cx, 0
 	jg notnegX_CalculateFvalue
 	neg cx 
-	notnegX_CalculateFvalue:
+notnegX_CalculateFvalue:
 	mov ax, cx 
 	
 	sub dx, si
 	cmp dx, 0
 	jg notnegY_CalculateFvalue
 	neg dx 
-	notnegY_CalculateFvalue:
+notnegY_CalculateFvalue:
 	add ax, dx ; get h(n)
 	
 endCalculateHvalue:
@@ -745,14 +758,14 @@ endp CalculateHvalue
 ;findLowestFcost
 ;Args: None
 ;Action: finds next node to explore from 
-;Return: index of node 
+;Return: index of node in the IndexOfBestNode part in the array
 ;------------------------------------------------------------------------;
 proc findLowestFcost
 	pusha 
 	mov ax, 32768
 	mov cx, NumberOfNodesSearcherd
 	mov IndexOfBestNode, 0
-	loopAllNodesInMemory:
+loopAllNodesInMemory:
 	push ax
 	mov ax, cx 
 	mov bx, 8 
@@ -788,30 +801,30 @@ proc findLowestFcost
 	pop cx 
 	pop bx 
 	jmp noNeedToSearch_findLowestFcost
-	notExploared_findLowestFcost:
+notExploared_findLowestFcost:
 	pop ax 
 	pop dx 
 	pop cx 
 	pop bx 
 	mov ax, dx 
 	mov IndexOfBestNode, bx
-	noNeedToSearch_findLowestFcost:
+noNeedToSearch_findLowestFcost:
 	loop loopAllNodesInMemory 
 	popa 
 	ret 
 endp findLowestFcost
 
 ;------------------------------------------------------------------------;
-;Vizualaize
+;Visualize
 ;Args: None
-;Action: starts the vizualaizetion process
+;Action: starts the Visualizetion process
 ;Return: ?
 ;------------------------------------------------------------------------;
-proc Vizualaize
+proc Visualize
 	;start 
 	xor dx, dx 
 	xor cx, cx 
-	mov ax, foundPath
+	mov ax, FoundPath
 	cmp ax, 0 
 	jne endallvizualize
 	
@@ -821,11 +834,11 @@ proc Vizualaize
 	call LoadChildren
 	
 
-	algorithemLoop:
+algorithemLoop:
 	call delay
-	mov ax, foundPath
+	mov ax, FoundPath
 	cmp ax, 0 
-	jne exitloop_Vizualaize
+	jne exitloop_Visualize
 	call findLowestFcost
 	mov bx,IndexOfBestNode
 	cmp bx, 0
@@ -845,12 +858,12 @@ proc Vizualaize
 	
 
 	jmp algorithemLoop
-	exitloop_Vizualaize:
+exitloop_Visualize:
 
 	mov bx, 54
 	mov color, 54 
 	
-	paintpathloop:
+paintpathloop:
 	mov bx, ax 
 	mov dx,[word ptr NodesData + bx + 4]
 	mov cx,[word ptr NodesData + bx + 2]
@@ -861,11 +874,11 @@ proc Vizualaize
 	mov ax, [word ptr NodesData + bx]
 	cmp ax, 0 
 	jne paintpathloop
-	endallvizualize:
+endallvizualize:
 	mov color, 0h
-	mov foundPath, 1
+	mov FoundPath, 1
 	ret 
-endp Vizualaize
+endp Visualize
 
 ;------------------------------------------------------------------------;
 ;SetXandYProperly
@@ -885,11 +898,55 @@ proc SetXandYProperly
 	pop dx 
 	ret
 endp SetXandYProperly
+
+;------------------------------------------------------------------------;
+;CycleSpeed
+;Args: ScanCode Of key
+;Action: CycleSpeed
+;Return: None
+;------------------------------------------------------------------------;
+KeyPressed_CycleSpeed equ [bp + 4]
+proc CycleSpeed 
+	push bp
+	mov bp, sp 
+	pusha
+	
+	mov ax, 72 ;key scan of up arrow 
+	cmp KeyPressed_CycleSpeed, ax 
+	jne IfDownArrow
+		;i know its dumb
+	call delay; it is with speed but not that noticable
+	call delay ; it is with speed but not that noticable
+	xor ax, ax 
+	mov al, [Speed]
+	cmp al, 5 
+	je EndCycleSpeed
+	inc ax
+	mov [Speed], al
+	jmp EndCycleSpeed
+IfDownArrow:
+	mov ax, 80; key scan of down arrow 
+	cmp KeyPressed_CycleSpeed, ax 
+	jne EndCycleSpeed
+		;i know its dumb
+	call delay; it is with speed but not that noticable
+	call delay ; it is with speed but not that noticable
+	xor ax, ax 
+	mov al, [Speed]
+	cmp al, 1 
+	je EndCycleSpeed
+	dec ax
+	mov [Speed], al
+EndCycleSpeed:
+	popa 
+	pop bp 
+	ret 2
+endp CycleSpeed
 start :
 	mov ax, @data
 	mov ds, ax
 	
-	;allocate memory for a* (https://www.ic.unicamp.br/~pannain/mc404/aulas/pdfs/Art%20Of%20Intel%20x86%20Assembly.pdf   page 737 in pdf) memory will go as follow
+	
 	; offset color 3, 4 if found   4 5 index of best node  6 7 numbers of nodes searched (found f value for it) x start point 8 9, y start point 10 11, x end point 12 13 , y end point 14 15      0 1 index of src 2 3 x 4 5 y 6 7 f value 
 	
 	; Graphic mode
@@ -939,26 +996,31 @@ start :
 		mov ax, 03h
 		int 033h
 		
+		call delay ; it is releted to the speed but its not noticable 
+		
 		xor ax, ax 
 		in al, 064h
 		cmp al, 10b
 		je waitfordata  ;idk why it doesnt work anyways
 		in al, 60h
 		cmp al, 02h
-		jne nextKeyboardCheck
+		jne IfSwitchDijkstra
 		mov [Mode], 1
 		jmp waitfordata
-		nextKeyboardCheck:
+IfSwitchDijkstra:
 		cmp al, 03h
-		jne nextKeyboardCheckForExit
+		jne IfExit
 		mov [Mode], 2
 		jmp waitfordata
-nextKeyboardCheckForExit:
+IfExit:
 		cmp al, 01h
-		jne notExitGame 
+		jne IfSpeed 
 		jmp exitgame 
-		
-		notExitGame:
+IfSpeed:
+		push ax
+		call CycleSpeed
+
+
 		push bx 
 		cmp bx, 0h
 		jne handleInput
@@ -967,7 +1029,7 @@ nextKeyboardCheckForExit:
 
 		handleInput:
 		
-		mov ax, foundPath
+		mov ax, FoundPath
 		cmp ax, 0 
 		je NoNeedClear
 		mov ax, 02h;remove mouse 
@@ -1034,7 +1096,7 @@ notOnStartOrEnd:
 		jne  notVizualize_clickcheck
 		mov ax, 02h;remove mouse 
 		int 033h
-		call Vizualaize
+		call Visualize
 		mov ax, 01h;show mouse 
 		int 033h
 		jmp waitfordata
