@@ -10,7 +10,7 @@ DATASEG
 	tmpHeader db 54 dup (0)
 	Palette db 1024 dup (0) ; All files should have the same palette, so we apply it once.
 	picture db 10 * 320 dup (0)
-	Speed db 1 ; 1 to 7
+	Speed db 1 ; 1 to 5
 CODESEG
 ;------------------------------------------------------------------------;
 ;general equ 
@@ -29,11 +29,13 @@ YendPoint	equ		[word ptr NodesData + 14]
 ;Action: cause delay depends on speed
 ;Return: None.
 ;------------------------------------------------------------------------;
+time equ [bp + 4]
 proc delay
+	push bp
+	mov bp, sp 
 	pusha 
 	xor bx, bx  
-	mov bl, 8
-	sub bl, [Speed]
+	mov bl, time
 	mov ax, 2000
 	mul bx 
 	mov dx, ax 
@@ -42,7 +44,8 @@ proc delay
 	mov ah, 86h
 	int 15h
 	popa 
-	ret 
+	pop bp 
+	ret 2
 endp delay 
 ; Open a file. Parameters are:
 ; 1. reference to filename on dx (ASCIZ format)
@@ -189,12 +192,76 @@ CPLoop:
 endp DrawFromMemory
 
 ;------------------------------------------------------------------------;
-;PaintScrean
+;DingDong
+;Args:None.
+;Action: makes a ding and a dong 
+;Return: None.
+;------------------------------------------------------------------------;
+
+proc DingDong
+	pusha 
+	mov bl, 1
+	mov cx, 60
+	loop_DingDong:
+	cmp cx, 40 
+	jne IfNeedToIncBl
+	mov bl, 2
+IfNeedToIncBl:
+	cmp cx, 10
+	jne IfIncNotNeeded
+	mov bl, 4
+IfIncNotNeeded:
+	in al, 61h
+	or al, 00000011b
+	out 61h, al
+	
+	mov al, 0B6h
+	out 43h, al
+	
+
+
+	mov ax, 1139 ;C 3: 1139  C 2: 2278  C 1: 4556
+	mul bl
+	out 42h, al ; Sending lower byte
+	mov al, ah
+	out 42h, al ; Sending upper byte
+
+	
+	
+	mov ax, 854 ;F 3:  F 2:  F1: 
+	mul bl
+	out 42h, al ; Sending lower byte
+	mov al, ah
+	out 42h, al ; Sending upper byte
+	
+	
+
+	mov ax, 1521 ;G #3 : 718 G# 2: 1436  G# 1: 2872
+	mul bl 
+	out 42h, al ; Sending lower byte
+	mov al, ah
+	out 42h, al ; Sending upper byte
+	
+	push  1
+	call delay
+	
+	in al, 61h
+	and al, 11111100b
+	out 61h, al
+	
+	
+	loop loop_DingDong
+	popa 
+	ret 
+endp DingDong 
+
+;------------------------------------------------------------------------;
+;PaintScreen
 ;Args:None.
 ;Action: paint screan Default 
 ;Return: None.
 ;------------------------------------------------------------------------;
-proc PaintScrean
+proc PaintScreen
 	mov XstartPoint, 21	;define start node
 	mov YstartPoint, 101 
 	
@@ -215,7 +282,7 @@ proc PaintScrean
 			add dx, 1h
 			mov cx, 0h
 			cmp dx, 200
-			je endPaintScrean
+			je endPaintScreen
 			loop2_paintboard: 
 				push dx
 				push cx
@@ -252,7 +319,7 @@ proc PaintScrean
 					jmp loop1_paintboard
 				
 	; Wait for key press
-	endPaintScrean:
+	endPaintScreen:
 	mov color, 59
 	push YstartPoint
 	push XstartPoint
@@ -266,7 +333,7 @@ proc PaintScrean
 	mov color, 0
 	
 	ret
-endp PaintScrean
+endp PaintScreen
 
 ;------------------------------------------------------------------------;
 ;PaintSquare
@@ -835,6 +902,9 @@ proc Visualize
 	
 
 algorithemLoop:
+	mov ax, 6
+	sub al, [Speed]
+	push ax 
 	call delay
 	mov ax, FoundPath
 	cmp ax, 0 
@@ -859,7 +929,8 @@ algorithemLoop:
 
 	jmp algorithemLoop
 exitloop_Visualize:
-
+	
+	call DingDong
 	mov bx, 54
 	mov color, 54 
 	
@@ -914,9 +985,10 @@ proc CycleSpeed
 	mov ax, 72 ;key scan of up arrow 
 	cmp KeyPressed_CycleSpeed, ax 
 	jne IfDownArrow
-		;i know its dumb
+	
+	push 2
 	call delay; it is with speed but not that noticable
-	call delay ; it is with speed but not that noticable
+	
 	xor ax, ax 
 	mov al, [Speed]
 	cmp al, 5 
@@ -928,8 +1000,7 @@ IfDownArrow:
 	mov ax, 80; key scan of down arrow 
 	cmp KeyPressed_CycleSpeed, ax 
 	jne EndCycleSpeed
-		;i know its dumb
-	call delay; it is with speed but not that noticable
+	push 2
 	call delay ; it is with speed but not that noticable
 	xor ax, ax 
 	mov al, [Speed]
@@ -942,6 +1013,7 @@ EndCycleSpeed:
 	pop bp 
 	ret 2
 endp CycleSpeed
+
 start :
 	mov ax, @data
 	mov ds, ax
@@ -953,8 +1025,7 @@ start :
 	mov ax, 13h
 	int 10h 
 	
-	
-	call PaintScrean
+	call PaintScreen
 	
 	mov dx, offset picFilename
 	call OpenFile
@@ -996,7 +1067,8 @@ start :
 		mov ax, 03h
 		int 033h
 		
-		call delay ; it is releted to the speed but its not noticable 
+		push 4
+		call delay 
 		
 		xor ax, ax 
 		in al, 064h
@@ -1036,7 +1108,7 @@ IfSpeed:
 		int 033h
 		
 		call ClearArray
-		call PaintScrean
+		call PaintScreen
 		
 		mov ax, 01h;remove mouse 
 		int 033h
@@ -1124,7 +1196,7 @@ notOnStartOrEnd:
 		jne notClear 
 		mov ax, 02h;remove mouse 
 		int 033h
-		call paintscrean
+		call PaintScreen
 		mov ax, 01h;show mouse 
 		int 033h
 		jmp waitfordata
